@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -1125,14 +1125,14 @@ function removeWrongAnswer(tagalog) {
     showWrongBook();
 }
 
-function generateWrongAnswersQuiz() {
+async function generateWrongAnswersQuiz() {
     const userData = getUserData();
     const words = userData.wrongAnswers.slice(0, 10);
     currentQuizTotal = words.length;
     let currentIndex = 0;
     let correctCount = 0;
     
-    function showQuestion(index) {
+    async function showQuestion(index) {
         if (index >= words.length) {
             showQuizResult(correctCount, words.length);
             return;
@@ -1184,18 +1184,20 @@ function generateWrongAnswersQuiz() {
     }
     
     window.selectAnswer = selectAnswer;
-    showQuestion(0);
+    await showQuestion(0);
 }
 
-function startPractice(category) {
+async function startPractice(category) {
+    console.log('startPractice called with category:', category);
     currentCategory = category;
+    console.log('currentCategory set to:', currentCategory);
     document.getElementById('quizTitle').textContent = getCategoryName(category);
     document.getElementById('quizContent').classList.remove('hidden');
     document.getElementById('quizResult').classList.add('hidden');
     
     showPage('learning');
     
-    generateQuiz();
+    await generateQuiz();
 }
 
 function getCategoryName(cat) {
@@ -1217,18 +1219,48 @@ function getCategoryName(cat) {
     return names[cat] || '练习';
 }
 
-async function getQuizWords() {
-    const vocab = await getAllVocab();
+function getQuizWords() {
+    if (typeof VOCABULARY === 'undefined') {
+        console.error('VOCABULARY is not defined!');
+        return [];
+    }
+    
+    const vocab = VOCABULARY;
     let words = [];
     
-    if (currentCategory === 'mixed' || currentCategory === 'learn') {
+    console.log('getQuizWords called with currentCategory:', currentCategory);
+    
+    if (currentCategory === 'mixed' || currentCategory === 'spelling') {
+        Object.keys(vocab).forEach(cat => {
+            if (cat !== 'phrase') {
+                words = words.concat(vocab[cat]);
+            }
+        });
+    } else if (currentCategory === 'cloze' || currentCategory === 'translation' || currentCategory === 'write') {
+        Object.keys(vocab).forEach(cat => {
+            vocab[cat].forEach(word => {
+                if (word.example && word.example !== '（无例句）' && word.example.trim() !== '') {
+                    words.push(word);
+                }
+            });
+        });
+        
+        if (words.length === 0) {
+            console.log('No words with examples found, falling back to all words');
+            Object.keys(vocab).forEach(cat => {
+                words = words.concat(vocab[cat]);
+            });
+        }
+    } else if (vocab[currentCategory]) {
+        words = vocab[currentCategory];
+    } else {
+        console.log('No matching category found, using all words');
         Object.keys(vocab).forEach(cat => {
             words = words.concat(vocab[cat]);
         });
-    } else if (vocab[currentCategory]) {
-        words = vocab[currentCategory];
     }
     
+    console.log('getQuizWords returning', words.length, 'words');
     return shuffleArray(words).slice(0, 10);
 }
 
@@ -1242,18 +1274,32 @@ function shuffleArray(array) {
 }
 
 async function generateQuiz() {
+    console.log('generateQuiz: typeof getQuizWords =', typeof getQuizWords);
+    if (typeof getQuizWords !== 'function') {
+        console.error('getQuizWords is not a function!');
+        return;
+    }
+    
     const words = await getQuizWords();
-    currentQuizTotal = words.length;
+    console.log('generateQuiz: words =', words);
+    console.log('generateQuiz: words.length =', words ? words.length : 'undefined');
+    currentQuizTotal = words ? words.length : 0;
     let currentIndex = 0;
     let correctCount = 0;
     
-    async function showQuestion(index) {
+    function showQuestion(index) {
+        console.log('showQuestion: index =', index, ', words.length =', words.length);
         if (index >= words.length) {
             showQuizResult(correctCount, words.length);
             return;
         }
         
         const word = words[index];
+        console.log('showQuestion: word =', word);
+        if (!word) {
+            console.error('word is undefined at index', index);
+            return;
+        }
         document.getElementById('quizCount').textContent = (index + 1) + '/' + words.length;
         document.getElementById('quizProgressFill').style.width = ((index) / words.length * 100) + '%';
         
@@ -1271,7 +1317,7 @@ async function generateQuiz() {
             document.getElementById('typeInput').classList.add('hidden');
             document.getElementById('checkBtn').classList.add('hidden');
             
-            const options = await generateOptions(word.chinese);
+            const options = generateOptions(word.chinese);
             options.forEach(opt => {
                 const btn = document.createElement('button');
                 btn.className = 'quiz-option';
@@ -1306,6 +1352,15 @@ async function generateQuiz() {
             document.getElementById('typeInput').focus();
             document.getElementById('checkBtn').classList.remove('hidden');
             document.getElementById('checkBtn').onclick = () => checkTranslation(word);
+        } else if (quizType === 'write') {
+            document.getElementById('quizQuestion').innerHTML = word.exampleTrans;
+            document.getElementById('quizHint').textContent = '请用他加禄语写出这个句子';
+            document.getElementById('quizOptions').innerHTML = '';
+            document.getElementById('typeInput').classList.remove('hidden');
+            document.getElementById('typeInput').value = '';
+            document.getElementById('typeInput').focus();
+            document.getElementById('checkBtn').classList.remove('hidden');
+            document.getElementById('checkBtn').onclick = () => checkWrite(word);
         }
     }
     
@@ -1329,9 +1384,9 @@ async function generateQuiz() {
             addToWrongAnswers(word);
         }
         
-        setTimeout(async () => {
+        setTimeout(() => {
             currentIndex++;
-            await showQuestion(currentIndex);
+            showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1352,10 +1407,10 @@ async function generateQuiz() {
             document.getElementById('typeInput').classList.add('wrong');
         }
         
-        setTimeout(async () => {
+        setTimeout(() => {
             currentIndex++;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
-            await showQuestion(currentIndex);
+            showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1376,10 +1431,10 @@ async function generateQuiz() {
             document.getElementById('typeInput').classList.add('wrong');
         }
         
-        setTimeout(async () => {
+        setTimeout(() => {
             currentIndex++;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
-            await showQuestion(currentIndex);
+            showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1392,16 +1447,34 @@ async function generateQuiz() {
         
         document.getElementById('quizHint').innerHTML = `正确答案是：<strong>${word.exampleTrans}</strong>`;
         
-        setTimeout(async () => {
+        setTimeout(() => {
             currentIndex++;
             document.getElementById('typeInput').disabled = false;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
             document.getElementById('checkBtn').disabled = false;
-            await showQuestion(currentIndex);
+            showQuestion(currentIndex);
         }, 3000);
     }
     
     window.checkTranslation = checkTranslation;
+    
+    function checkWrite(word) {
+        const input = document.getElementById('typeInput').value.trim();
+        document.getElementById('typeInput').disabled = true;
+        document.getElementById('checkBtn').disabled = true;
+        
+        document.getElementById('quizHint').innerHTML = `正确答案是：<strong>${word.example}</strong>`;
+        
+        setTimeout(() => {
+            currentIndex++;
+            document.getElementById('typeInput').disabled = false;
+            document.getElementById('typeInput').classList.remove('correct', 'wrong');
+            document.getElementById('checkBtn').disabled = false;
+            showQuestion(currentIndex);
+        }, 3000);
+    }
+    
+    window.checkWrite = checkWrite;
     
     window.checkTypeAnswer = function() {
         const word = words[currentIndex];
@@ -1411,10 +1484,12 @@ async function generateQuiz() {
             checkCloze(word);
         } else if (currentCategory === 'translation') {
             checkTranslation(word);
+        } else if (currentCategory === 'write') {
+            checkWrite(word);
         }
     };
     
-    await showQuestion(0);
+    showQuestion(0);
 }
 
 async function generateWrongBookQuiz(wrongWords) {
@@ -1423,7 +1498,7 @@ async function generateWrongBookQuiz(wrongWords) {
     let currentIndex = 0;
     let correctCount = 0;
     
-    async function showQuestion(index) {
+    function showQuestion(index) {
         if (index >= words.length) {
             showQuizResult(correctCount, words.length);
             return;
@@ -1480,7 +1555,7 @@ async function generateWrongBookQuiz(wrongWords) {
             document.getElementById('typeInput').classList.add('hidden');
             document.getElementById('checkBtn').classList.add('hidden');
             
-            const options = await generateOptions(word.chinese);
+            const options = generateOptions(word.chinese);
             options.forEach(opt => {
                 const btn = document.createElement('button');
                 btn.className = 'quiz-option';
@@ -1515,6 +1590,15 @@ async function generateWrongBookQuiz(wrongWords) {
             document.getElementById('typeInput').focus();
             document.getElementById('checkBtn').classList.remove('hidden');
             document.getElementById('checkBtn').onclick = () => checkWrongTranslation(word);
+        } else if (quizType === 'write') {
+            document.getElementById('quizQuestion').innerHTML = word.exampleTrans;
+            document.getElementById('quizHint').textContent = '请用他加禄语写出这个句子';
+            document.getElementById('quizOptions').innerHTML = '';
+            document.getElementById('typeInput').classList.remove('hidden');
+            document.getElementById('typeInput').value = '';
+            document.getElementById('typeInput').focus();
+            document.getElementById('checkBtn').classList.remove('hidden');
+            document.getElementById('checkBtn').onclick = () => checkWrongWrite(word);
         }
     }
     
@@ -1538,9 +1622,9 @@ async function generateWrongBookQuiz(wrongWords) {
             addHistory(word.tagalog, '错误', false);
         }
         
-        setTimeout(async () => {
+        setTimeout(() => {
             currentIndex++;
-            await showQuestion(currentIndex);
+            showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1559,10 +1643,10 @@ async function generateWrongBookQuiz(wrongWords) {
             document.getElementById('typeInput').classList.add('wrong');
         }
         
-        setTimeout(async () => {
+        setTimeout(() => {
             currentIndex++;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
-            await showQuestion(currentIndex);
+            showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1592,10 +1676,10 @@ async function generateWrongBookQuiz(wrongWords) {
             document.getElementById('typeInput').classList.add('wrong');
         }
         
-        setTimeout(async () => {
+        setTimeout(() => {
             currentIndex++;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
-            await showQuestion(currentIndex);
+            showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1606,16 +1690,32 @@ async function generateWrongBookQuiz(wrongWords) {
         
         document.getElementById('quizHint').innerHTML = `正确答案是：<strong>${word.exampleTrans}</strong>`;
         
-        setTimeout(async () => {
+        setTimeout(() => {
             currentIndex++;
             document.getElementById('typeInput').disabled = false;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
             document.getElementById('checkBtn').disabled = false;
-            await showQuestion(currentIndex);
+            showQuestion(currentIndex);
         }, 3000);
     }
     
-    await showQuestion(0);
+    function checkWrongWrite(word) {
+        const input = document.getElementById('typeInput').value.trim();
+        document.getElementById('typeInput').disabled = true;
+        document.getElementById('checkBtn').disabled = true;
+        
+        document.getElementById('quizHint').innerHTML = `正确答案是：<strong>${word.example}</strong>`;
+        
+        setTimeout(() => {
+            currentIndex++;
+            document.getElementById('typeInput').disabled = false;
+            document.getElementById('typeInput').classList.remove('correct', 'wrong');
+            document.getElementById('checkBtn').disabled = false;
+            showQuestion(currentIndex);
+        }, 3000);
+    }
+    
+    showQuestion(0);
 }
 
 // 完整的单词学习功能
@@ -1941,8 +2041,8 @@ function getPosName(pos) {
     return names[pos] || pos;
 }
 
-async function generateOptions(correctAnswer) {
-    const vocab = await getAllVocab();
+function generateOptions(correctAnswer) {
+    const vocab = VOCABULARY;
     const allAnswers = [];
     Object.keys(vocab).forEach(cat => {
         vocab[cat].forEach(w => {
@@ -2306,7 +2406,7 @@ async function startPhrasePractice(mode) {
     document.getElementById('quizResult').classList.add('hidden');
     
     showPage('learning');
-    showPhraseQuestion(0);
+    await showPhraseQuestion(0);
 }
 
 function getPhraseModeName(mode) {
@@ -2319,7 +2419,7 @@ function getPhraseModeName(mode) {
     return names[mode] || '日常用语练习';
 }
 
-function showPhraseQuestion(index) {
+async function showPhraseQuestion(index) {
     if (index >= phraseWords.length) {
         showPhraseQuizResult();
         return;
@@ -2406,9 +2506,9 @@ function selectPhraseAnswer(btn, isCorrect, phrase) {
         addToWrongAnswers(phrase);
     }
     
-    setTimeout(() => {
+    setTimeout(async () => {
         phraseIndex++;
-        showPhraseQuestion(phraseIndex);
+        await showPhraseQuestion(phraseIndex);
     }, 1500);
 }
 
@@ -2428,10 +2528,10 @@ function checkPhraseCloze(phrase, blankWord) {
         document.getElementById('quizHint').innerHTML = `正确答案是：<strong>${blankWord}</strong><br>完整句子：${phrase.tagalog}<br>中文：${phrase.chinese}`;
     }
     
-    setTimeout(() => {
+    setTimeout(async () => {
         phraseIndex++;
         document.getElementById('typeInput').classList.remove('correct', 'wrong');
-        showPhraseQuestion(phraseIndex);
+        await showPhraseQuestion(phraseIndex);
     }, 2000);
 }
 
@@ -2538,10 +2638,34 @@ function updateQuizWords() {
             Object.keys(vocab).forEach(cat => {
                 words = words.concat(vocab[cat]);
             });
+        } else if (currentCategory === 'spelling') {
+            Object.keys(vocab).forEach(cat => {
+                if (cat !== 'phrase') {
+                    words = words.concat(vocab[cat]);
+                }
+            });
+        } else if (currentCategory === 'cloze' || currentCategory === 'translation' || currentCategory === 'write') {
+            Object.keys(vocab).forEach(cat => {
+                vocab[cat].forEach(word => {
+                    if (word.example && word.example !== '（无例句）' && word.example.trim() !== '') {
+                        words.push(word);
+                    }
+                });
+            });
+            
+            if (words.length === 0) {
+                Object.keys(vocab).forEach(cat => {
+                    words = words.concat(vocab[cat]);
+                });
+            }
         } else if (currentCategory === 'phrase' || currentCategory === 'greetings') {
             words = vocab['phrase'] || [];
         } else if (vocab[currentCategory]) {
             words = vocab[currentCategory];
+        } else {
+            Object.keys(vocab).forEach(cat => {
+                words = words.concat(vocab[cat]);
+            });
         }
         
         return shuffleArray(words).slice(0, 10);
