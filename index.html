@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -1247,7 +1247,7 @@ async function generateQuiz() {
     let currentIndex = 0;
     let correctCount = 0;
     
-    function showQuestion(index) {
+    async function showQuestion(index) {
         if (index >= words.length) {
             showQuizResult(correctCount, words.length);
             return;
@@ -1271,7 +1271,7 @@ async function generateQuiz() {
             document.getElementById('typeInput').classList.add('hidden');
             document.getElementById('checkBtn').classList.add('hidden');
             
-            const options = generateOptions(word.chinese);
+            const options = await generateOptions(word.chinese);
             options.forEach(opt => {
                 const btn = document.createElement('button');
                 btn.className = 'quiz-option';
@@ -1329,9 +1329,9 @@ async function generateQuiz() {
             addToWrongAnswers(word);
         }
         
-        setTimeout(() => {
+        setTimeout(async () => {
             currentIndex++;
-            showQuestion(currentIndex);
+            await showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1352,10 +1352,10 @@ async function generateQuiz() {
             document.getElementById('typeInput').classList.add('wrong');
         }
         
-        setTimeout(() => {
+        setTimeout(async () => {
             currentIndex++;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
-            showQuestion(currentIndex);
+            await showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1376,10 +1376,10 @@ async function generateQuiz() {
             document.getElementById('typeInput').classList.add('wrong');
         }
         
-        setTimeout(() => {
+        setTimeout(async () => {
             currentIndex++;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
-            showQuestion(currentIndex);
+            await showQuestion(currentIndex);
         }, 1500);
     }
     
@@ -1392,12 +1392,12 @@ async function generateQuiz() {
         
         document.getElementById('quizHint').innerHTML = `正确答案是：<strong>${word.exampleTrans}</strong>`;
         
-        setTimeout(() => {
+        setTimeout(async () => {
             currentIndex++;
             document.getElementById('typeInput').disabled = false;
             document.getElementById('typeInput').classList.remove('correct', 'wrong');
             document.getElementById('checkBtn').disabled = false;
-            showQuestion(currentIndex);
+            await showQuestion(currentIndex);
         }, 3000);
     }
     
@@ -1414,7 +1414,7 @@ async function generateQuiz() {
         }
     };
     
-    showQuestion(0);
+    await showQuestion(0);
 }
 
 async function generateWrongBookQuiz(wrongWords) {
