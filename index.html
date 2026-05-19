@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -1274,30 +1274,30 @@ function shuffleArray(array) {
 }
 
 async function generateQuiz() {
-    console.log('generateQuiz: typeof getQuizWords =', typeof getQuizWords);
     if (typeof getQuizWords !== 'function') {
-        console.error('getQuizWords is not a function!');
         return;
     }
     
     const words = await getQuizWords();
-    console.log('generateQuiz: words =', words);
-    console.log('generateQuiz: words.length =', words ? words.length : 'undefined');
     currentQuizTotal = words ? words.length : 0;
+    if (!words || words.length === 0) {
+        showQuizResult(0, 0);
+        return;
+    }
+    
     let currentIndex = 0;
     let correctCount = 0;
     
     function showQuestion(index) {
-        console.log('showQuestion: index =', index, ', words.length =', words.length);
         if (index >= words.length) {
             showQuizResult(correctCount, words.length);
             return;
         }
         
         const word = words[index];
-        console.log('showQuestion: word =', word);
         if (!word) {
-            console.error('word is undefined at index', index);
+            currentIndex++;
+            showQuestion(currentIndex);
             return;
         }
         document.getElementById('quizCount').textContent = (index + 1) + '/' + words.length;
@@ -2042,15 +2042,32 @@ function getPosName(pos) {
 }
 
 function generateOptions(correctAnswer) {
+    if (typeof VOCABULARY === 'undefined') {
+        console.error('VOCABULARY is not defined in generateOptions');
+        return [correctAnswer, '选项1', '选项2', '选项3'];
+    }
+    
     const vocab = VOCABULARY;
     const allAnswers = [];
-    Object.keys(vocab).forEach(cat => {
-        vocab[cat].forEach(w => {
-            if (w.chinese !== correctAnswer) {
-                allAnswers.push(w.chinese);
+    
+    try {
+        Object.keys(vocab).forEach(cat => {
+            if (Array.isArray(vocab[cat])) {
+                vocab[cat].forEach(w => {
+                    if (w && w.chinese && w.chinese !== correctAnswer) {
+                        allAnswers.push(w.chinese);
+                    }
+                });
             }
         });
-    });
+    } catch (e) {
+        console.error('Error in generateOptions:', e);
+        return [correctAnswer, '选项1', '选项2', '选项3'];
+    }
+    
+    if (allAnswers.length < 3) {
+        return [correctAnswer, '选项1', '选项2', '选项3'];
+    }
     
     const shuffled = shuffleArray(allAnswers).slice(0, 3);
     shuffled.push(correctAnswer);
@@ -2627,7 +2644,39 @@ function updateCategoryNames() {
     };
 }
 
-// 更新getQuizWords以支持phrase
+function speakTagalog(text) {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        
+        const voices = window.speechSynthesis.getVoices();
+        let tagalogVoice = null;
+        
+        for (let voice of voices) {
+            if (voice.lang.startsWith('tl') || voice.lang.startsWith('fil')) {
+                tagalogVoice = voice;
+                break;
+            }
+        }
+        
+        if (!tagalogVoice) {
+            console.warn('Tagalog voice not available, skipping speech');
+            return;
+        }
+        
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'tl-PH';
+        utterance.rate = 0.8;
+        utterance.pitch = 1;
+        utterance.voice = tagalogVoice;
+        
+        utterance.onerror = function(event) {
+            console.warn('Speech synthesis error:', event.error);
+        };
+        
+        window.speechSynthesis.speak(utterance);
+    }
+}
+
 function updateQuizWords() {
     const originalGetQuizWords = getQuizWords;
     window.getQuizWords = async function() {
